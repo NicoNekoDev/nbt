@@ -1,6 +1,7 @@
 package dev.dewy.nbt.tags.primitive;
 
 import com.google.gson.JsonObject;
+import dev.dewy.nbt.api.Tag;
 import dev.dewy.nbt.api.registry.TagTypeRegistry;
 import dev.dewy.nbt.api.snbt.SnbtConfig;
 import dev.dewy.nbt.tags.TagType;
@@ -33,8 +34,8 @@ public class IntTag extends NumericalTag<Integer> {
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.INT.getId();
+    public TagType getType() {
+        return TagType.INT;
     }
 
     @Override
@@ -52,8 +53,10 @@ public class IntTag extends NumericalTag<Integer> {
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public IntTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         output.writeInt(this.value);
+
+        return this;
     }
 
     @Override
@@ -71,7 +74,7 @@ public class IntTag extends NumericalTag<Integer> {
     @Override
     public JsonObject toJson(int depth, TagTypeRegistry registry) {
         JsonObject json = new JsonObject();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -96,17 +99,17 @@ public class IntTag extends NumericalTag<Integer> {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        IntTag intTag = (IntTag) o;
-
-        return value == intTag.value;
+    public Tag copy() {
+        return new IntTag(getName(), getValue());
     }
 
     @Override
     public int hashCode() {
-        return value;
+        return Integer.hashCode(this.value);
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof IntTag other && this.value == other.value);
     }
 }

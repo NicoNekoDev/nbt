@@ -2,6 +2,7 @@ package dev.dewy.nbt.tags.array;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import dev.dewy.nbt.api.Tag;
 import dev.dewy.nbt.api.registry.TagTypeRegistry;
 import dev.dewy.nbt.api.snbt.SnbtConfig;
 import dev.dewy.nbt.tags.TagType;
@@ -35,7 +36,7 @@ public class LongArrayTag extends ArrayTag<Long> {
     /**
      * Constructs a long array tag with a given name and value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code long[]} value.
      */
     public LongArrayTag(String name, @NonNull long[] value) {
@@ -55,7 +56,7 @@ public class LongArrayTag extends ArrayTag<Long> {
     /**
      * Constructs a long array tag with a given name, using a List object to determine its {@code long[]} value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code List<>} value, to be converted to a primitive {@code long[]} array.
      */
     public LongArrayTag(String name, @NonNull List<Long> value) {
@@ -64,8 +65,8 @@ public class LongArrayTag extends ArrayTag<Long> {
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.LONG_ARRAY.getId();
+    public TagType getType() {
+        return TagType.LONG_ARRAY;
     }
 
     @Override
@@ -83,12 +84,14 @@ public class LongArrayTag extends ArrayTag<Long> {
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public LongArrayTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         output.writeInt(this.value.length);
 
         for (long l : this) {
             output.writeLong(l);
         }
+
+        return this;
     }
 
     @Override
@@ -106,7 +109,7 @@ public class LongArrayTag extends ArrayTag<Long> {
     public JsonObject toJson(int depth, TagTypeRegistry registry) throws IOException {
         JsonObject json = new JsonObject();
         JsonArray array = new JsonArray();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -169,7 +172,7 @@ public class LongArrayTag extends ArrayTag<Long> {
         }
 
         if (config.isPrettyPrint() && this.value.length < config.getInlineThreshold()) {
-            sb.append("\n").append(StringUtils.multiplyIndent(depth , config)).append(']');
+            sb.append("\n").append(StringUtils.multiplyIndent(depth, config)).append(']');
         } else {
             sb.append(']');
         }
@@ -226,17 +229,17 @@ public class LongArrayTag extends ArrayTag<Long> {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        LongArrayTag that = (LongArrayTag) o;
-
-        return Arrays.equals(value, that.value);
+    public Tag copy() {
+        return new LongArrayTag(getName(), getValue());
     }
 
     @Override
     public int hashCode() {
-        return Arrays.hashCode(value);
+        return Arrays.hashCode(this.value);
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof LongArrayTag other && this.value == other.value);
     }
 }

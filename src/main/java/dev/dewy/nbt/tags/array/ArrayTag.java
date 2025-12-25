@@ -48,6 +48,7 @@ public abstract class ArrayTag<T> extends Tag implements SnbtSerializable, JsonS
      * @param index index at which the element(s) are to be inserted.
      * @param elements element(s) to be inserted.
      */
+    @SuppressWarnings("unchecked")
     public abstract void insert(int index, T... elements);
 
     /**

@@ -5,7 +5,6 @@ import com.google.gson.JsonObject;
 import dev.dewy.nbt.api.Tag;
 import dev.dewy.nbt.api.json.JsonSerializable;
 import dev.dewy.nbt.api.registry.TagTypeRegistry;
-import dev.dewy.nbt.api.registry.TagTypeRegistryException;
 import dev.dewy.nbt.api.snbt.SnbtConfig;
 import dev.dewy.nbt.api.snbt.SnbtSerializable;
 import dev.dewy.nbt.tags.TagType;
@@ -22,6 +21,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * The compound tag (type ID 10) is used for storing an unordered map of any and all named tags.
@@ -52,7 +52,7 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
     /**
      * Constructs a compound tag with a given name and {@code Map<>} value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code Map<>} value.
      */
     public CompoundTag(String name, @NonNull Map<String, Tag> value) {
@@ -61,8 +61,8 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.COMPOUND.getId();
+    public TagType getType() {
+        return TagType.COMPOUND;
     }
 
     @Override
@@ -80,19 +80,21 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public CompoundTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         if (depth > 512) {
             throw new IOException("NBT structure too complex (depth > 512).");
         }
 
         for (Tag tag : this) {
-            output.writeByte(tag.getTypeId());
+            output.writeByte(tag.getType().getId());
             output.writeUTF(tag.getName());
 
             tag.write(output, depth + 1, registry);
         }
 
         output.writeByte(0);
+
+        return this;
     }
 
     @Override
@@ -106,17 +108,13 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
         byte nextTypeId;
         Tag nextTag;
         while ((nextTypeId = input.readByte()) != 0) {
-            Class<? extends Tag> tagClass = registry.getClassFromId(nextTypeId);
+            Supplier<Tag> tagFactory = registry.getFactoryFromId(nextTypeId);
 
-            if (tagClass == null) {
+            if (tagFactory == null) {
                 throw new IOException("Tag type with ID " + nextTypeId + " not present in tag type registry.");
             }
 
-            try {
-                nextTag = registry.instantiate(tagClass);
-            } catch (TagTypeRegistryException e) {
-                throw new IOException(e);
-            }
+            nextTag = tagFactory.get();
 
             nextTag.setName(input.readUTF());
             nextTag.read(input, depth + 1, registry);
@@ -137,7 +135,7 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
 
         JsonObject json = new JsonObject();
         JsonObject value = new JsonObject();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -172,23 +170,19 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
 
         Map<String, Tag> tags = new LinkedHashMap<>();
 
-        byte nextTypeId;
+        String nextTypeId;
         Tag nextTag;
         for (Map.Entry<String, JsonElement> entry : json.getAsJsonObject("value").entrySet()) {
             JsonObject entryJson = entry.getValue().getAsJsonObject();
 
-            nextTypeId = entryJson.get("type").getAsByte();
-            Class<? extends Tag> tagClass = registry.getClassFromId(nextTypeId);
+            nextTypeId = entryJson.getAsJsonPrimitive("type").getAsString();
+            Supplier<Tag> tagFactory = registry.getFactoryFromId(nextTypeId);
 
-            if (tagClass == null) {
-                throw new IOException("Tag type with ID " + nextTypeId + " not present in tag type registry.");
+            if (tagFactory == null) {
+                throw new IOException("Tag type with name " + nextTypeId + " not present in tag type registry.");
             }
 
-            try {
-                nextTag = registry.instantiate(tagClass);
-            } catch (TagTypeRegistryException e) {
-                throw new IOException(e);
-            }
+            nextTag = tagFactory.get();
 
             ((JsonSerializable) nextTag).fromJson(entryJson, depth + 1, registry);
             tags.put(nextTag.getName(), nextTag);
@@ -237,7 +231,7 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
         }
 
         if (config.isPrettyPrint()) {
-            sb.append("\n").append(StringUtils.multiplyIndent(depth , config)).append('}');
+            sb.append("\n").append(StringUtils.multiplyIndent(depth, config)).append('}');
         } else {
             sb.append('}');
         }
@@ -267,23 +261,21 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
      * Adds a given tag to this compound. The tag must have a name, or NPE is thrown.
      *
      * @param tag the named tag to be added to the compound.
-     * @param <E> the type of an existing tag you believe you may be replacing (optional).
      * @return the previous value mapped with the tag's name as type E if provided, or null if there wasn't any.
      * @throws NullPointerException if the tag's name is null.
      */
-    public <E extends Tag> E put(@NonNull Tag tag) {
-        return (E) this.value.put(tag.getName(), tag);
+    public Tag put(@NonNull Tag tag) {
+        return this.value.put(tag.getName(), tag);
     }
 
     /**
      * Adds a given tag to this compound. Be careful, the tag's name is set to the {@code name} parameter automatically.
      *
      * @param name the tag's name (key).
-     * @param tag the tag to be added to the compound.
-     * @param <E> the type of an existing tag you believe you may be replacing (optional).
+     * @param tag  the tag to be added to the compound.
      * @return the previous value mapped with the tag's name as type E if provided, or null if there wasn't any.
      */
-    public <E extends Tag> E put(@NonNull String name, @NonNull Tag tag) {
+    public Tag put(@NonNull String name, @NonNull Tag tag) {
         tag.setName(name);
 
         return this.put(tag);
@@ -321,7 +313,7 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
         this.put(name, new StringTag(name, value));
     }
 
-    public <T extends Tag> void putList(@NonNull String name, List<T> value) {
+    public <C extends Tag> void putList(@NonNull String name, List<C> value) {
         this.put(name, new ListTag<>(name, value));
     }
 
@@ -341,70 +333,130 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
      * Removes a tag from this compound with a given name (key).
      *
      * @param key the name whose mapping is to be removed from this compound.
-     * @param <T> the tag type you believe you are removing (optional).
      * @return the previous value associated with {@code key} as type T if provided.
      */
-    public <T extends Tag> T remove(@NonNull String key) {
-        return (T) this.value.remove(key);
+    public Tag remove(@NonNull String key) {
+        return this.value.remove(key);
     }
 
     /**
      * Retrieves a tag from this compound with a given name (key).
      *
      * @param key the name whose mapping is to be retrieved from this compound.
-     * @param <T> the tag type you believe you are retrieving.
      * @return the value associated with {@code key} as type T.
      */
-    public <T extends Tag> T get(@NonNull String key) {
-        return (T) this.value.get(key);
+    public Tag get(@NonNull String key) {
+        return this.value.get(key);
     }
 
-    public ByteTag getByte(@NonNull String key) {
-        return this.get(key);
+    public Tag get(@NonNull String key, Tag defaultValue, TagType tagType) {
+        Tag tag = this.value.getOrDefault(key, defaultValue);
+
+        if (tag.getType() != tagType) return defaultValue;
+
+        return tag;
     }
 
-    public ShortTag getShort(@NonNull String key) {
-        return this.get(key);
+    public Tag get(@NonNull String key, TagType tagType) {
+        return this.get(key, null, tagType);
     }
 
-    public IntTag getInt(@NonNull String key) {
-        return this.get(key);
+    public ByteTag getByteTag(@NonNull String key) {
+        return (ByteTag) this.get(key, TagType.STRING);
     }
 
-    public LongTag getLong(@NonNull String key) {
-        return this.get(key);
+    public ByteTag getByteTag(@NonNull String key, ByteTag defaultValue) {
+        return (ByteTag) this.get(key, defaultValue, TagType.STRING);
     }
 
-    public FloatTag getFloat(@NonNull String key) {
-        return this.get(key);
+    public ShortTag getShortTag(@NonNull String key) {
+        return (ShortTag) this.get(key, TagType.SHORT);
     }
 
-    public DoubleTag getDouble(@NonNull String key) {
-        return this.get(key);
+    public ShortTag getShortTag(@NonNull String key, ShortTag defaultValue) {
+        return (ShortTag) this.get(key, defaultValue, TagType.SHORT);
     }
 
-    public ByteArrayTag getByteArray(@NonNull String key) {
-        return this.get(key);
+    public IntTag getIntTag(@NonNull String key) {
+        return (IntTag) this.get(key, TagType.INT);
     }
 
-    public StringTag getString(@NonNull String key) {
-        return this.get(key);
+    public IntTag getIntTag(@NonNull String key, IntTag defaultValue) {
+        return (IntTag) this.get(key, defaultValue, TagType.INT);
     }
 
-    public <T extends Tag> ListTag<T> getList(@NonNull String key) {
-        return this.get(key);
+    public LongTag getLongTag(@NonNull String key) {
+        return (LongTag) this.get(key, TagType.LONG);
     }
 
-    public CompoundTag getCompound(@NonNull String key) {
-        return this.get(key);
+    public LongTag getLongTag(@NonNull String key, LongTag defaultValue) {
+        return (LongTag) this.get(key, defaultValue, TagType.LONG);
     }
 
-    public IntArrayTag getIntArray(@NonNull String key) {
-        return this.get(key);
+    public FloatTag getFloatTag(@NonNull String key) {
+        return (FloatTag) this.get(key, TagType.FLOAT);
     }
 
-    public LongArrayTag getLongArray(@NonNull String key) {
-        return this.get(key);
+    public FloatTag getFloatTag(@NonNull String key, FloatTag defaultValue) {
+        return (FloatTag) this.get(key, defaultValue, TagType.FLOAT);
+    }
+
+    public DoubleTag getDoubleTag(@NonNull String key) {
+        return (DoubleTag) this.get(key, TagType.DOUBLE);
+    }
+
+    public DoubleTag getDoubleTag(@NonNull String key, DoubleTag defaultValue) {
+        return (DoubleTag) this.get(key, defaultValue, TagType.DOUBLE);
+    }
+
+    public ByteArrayTag getByteArrayTag(@NonNull String key) {
+        return (ByteArrayTag) this.get(key, TagType.BYTE_ARRAY);
+    }
+
+    public ByteArrayTag getByteArrayTag(@NonNull String key, ByteArrayTag defaultValue) {
+        return (ByteArrayTag) this.get(key, defaultValue, TagType.BYTE_ARRAY);
+    }
+
+    public StringTag getStringTag(@NonNull String key) {
+        return (StringTag) this.get(key, TagType.STRING);
+    }
+
+    public StringTag getStringTag(@NonNull String key, StringTag defaultValue) {
+        return (StringTag) this.get(key, defaultValue, TagType.STRING);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <C extends Tag> ListTag<C> getListTag(@NonNull String key) {
+        return (ListTag<C>) this.get(key, TagType.LIST);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <C extends Tag> ListTag<C> getListTag(@NonNull String key, ListTag<C> defaultValue) {
+        return (ListTag<C>) this.get(key, defaultValue, TagType.LIST);
+    }
+
+    public CompoundTag getCompoundTag(@NonNull String key) {
+        return (CompoundTag) this.get(key, TagType.COMPOUND);
+    }
+
+    public CompoundTag getCompoundTag(@NonNull String key, CompoundTag defaultValue) {
+        return (CompoundTag) this.get(key, defaultValue, TagType.COMPOUND);
+    }
+
+    public IntArrayTag getIntArrayTag(@NonNull String key) {
+        return (IntArrayTag) this.get(key, TagType.INT_ARRAY);
+    }
+
+    public IntArrayTag getIntArrayTag(@NonNull String key, IntArrayTag defaultValue) {
+        return (IntArrayTag) this.get(key, defaultValue, TagType.INT_ARRAY);
+    }
+
+    public LongArrayTag getLongArrayTag(@NonNull String key) {
+        return (LongArrayTag) this.get(key, TagType.LONG_ARRAY);
+    }
+
+    public LongArrayTag getLongArrayTag(@NonNull String key, LongArrayTag defaultValue) {
+        return (LongArrayTag) this.get(key, defaultValue, TagType.LONG_ARRAY);
     }
 
     /**
@@ -420,68 +472,68 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
     /**
      * Returns true if this compound contains an entry with a given name (key) and if that entry is of a given tag type, false otherwise.
      *
-     * @param key the name (key) to check for.
-     * @param typeId the tag type ID to test for.
+     * @param key  the name (key) to check for.
+     * @param type the tag type to test for.
      * @return true if this compound contains an entry with a given name (key) and if that entry is of a given tag type, false otherwise.
      */
-    public boolean contains(@NonNull String key, byte typeId) {
+    public boolean contains(@NonNull String key, TagType type) {
         if (!this.contains(key)) {
             return false;
         }
 
-        return this.get(key).getTypeId() == typeId;
+        return this.get(key).getType() == type;
     }
 
     public boolean containsByte(@NonNull String key) {
-        return this.contains(key, TagType.BYTE.getId());
+        return this.contains(key, TagType.BYTE);
     }
 
     public boolean containsShort(@NonNull String key) {
-        return this.contains(key, TagType.SHORT.getId());
+        return this.contains(key, TagType.SHORT);
     }
 
     public boolean containsInt(@NonNull String key) {
-        return this.contains(key, TagType.INT.getId());
+        return this.contains(key, TagType.INT);
     }
 
     public boolean containsLong(@NonNull String key) {
-        return this.contains(key, TagType.LONG.getId());
+        return this.contains(key, TagType.LONG);
     }
 
     public boolean containsFloat(@NonNull String key) {
-        return this.contains(key, TagType.FLOAT.getId());
+        return this.contains(key, TagType.FLOAT);
     }
 
     public boolean containsDouble(@NonNull String key) {
-        return this.contains(key, TagType.DOUBLE.getId());
+        return this.contains(key, TagType.DOUBLE);
     }
 
     public boolean containsByteArray(@NonNull String key) {
-        return this.contains(key, TagType.BYTE_ARRAY.getId());
+        return this.contains(key, TagType.BYTE_ARRAY);
     }
 
     public boolean containsString(@NonNull String key) {
-        return this.contains(key, TagType.STRING.getId());
+        return this.contains(key, TagType.STRING);
     }
 
     public boolean containsList(@NonNull String key) {
-        return this.contains(key, TagType.LIST.getId());
+        return this.contains(key, TagType.LIST);
     }
 
-    public boolean containsListOf(@NonNull String key, byte of) {
-        return this.containsList(key) && this.getList(key).getListType() == of;
+    public boolean containsListOf(@NonNull String key, TagType of) {
+        return this.containsList(key) && this.getListTag(key).getListType() == of;
     }
 
     public boolean containsCompound(@NonNull String key) {
-        return this.contains(key, TagType.COMPOUND.getId());
+        return this.contains(key, TagType.COMPOUND);
     }
 
     public boolean containsIntArray(@NonNull String key) {
-        return this.contains(key, TagType.INT_ARRAY.getId());
+        return this.contains(key, TagType.INT_ARRAY);
     }
 
     public boolean containsLongArray(@NonNull String key) {
-        return this.contains(key, TagType.LONG_ARRAY.getId());
+        return this.contains(key, TagType.LONG_ARRAY);
     }
 
     /**
@@ -530,17 +582,19 @@ public class CompoundTag extends Tag implements SnbtSerializable, JsonSerializab
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        CompoundTag that = (CompoundTag) o;
-
-        return Objects.equals(value, that.value);
+    public CompoundTag copy() {
+        CompoundTag copy = new CompoundTag();
+        this.value.forEach((key, value) -> copy.put(key, value.copy()));
+        return copy;
     }
 
     @Override
     public int hashCode() {
-        return value != null ? value.hashCode() : 0;
+        return this.value.hashCode();
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof CompoundTag other && this.value.equals(other.value));
     }
 }

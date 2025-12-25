@@ -30,7 +30,7 @@ public class StringTag extends Tag implements SnbtSerializable, JsonSerializable
     /**
      * Constructs a string tag with a given name and value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code String} value.
      */
     public StringTag(String name, @NonNull String value) {
@@ -39,8 +39,8 @@ public class StringTag extends Tag implements SnbtSerializable, JsonSerializable
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.STRING.getId();
+    public TagType getType() {
+        return TagType.STRING;
     }
 
     @Override
@@ -58,8 +58,10 @@ public class StringTag extends Tag implements SnbtSerializable, JsonSerializable
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public StringTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         output.writeUTF(this.value);
+
+        return this;
     }
 
     @Override
@@ -77,7 +79,7 @@ public class StringTag extends Tag implements SnbtSerializable, JsonSerializable
     @Override
     public JsonObject toJson(int depth, TagTypeRegistry registry) {
         JsonObject json = new JsonObject();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -107,17 +109,17 @@ public class StringTag extends Tag implements SnbtSerializable, JsonSerializable
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        StringTag stringTag = (StringTag) o;
-
-        return Objects.equals(value, stringTag.value);
+    public StringTag copy() {
+        return new StringTag(getName(), getValue());
     }
 
     @Override
     public int hashCode() {
-        return value.hashCode();
+        return this.value.hashCode();
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof StringTag other && this.value.equals(other.value));
     }
 }

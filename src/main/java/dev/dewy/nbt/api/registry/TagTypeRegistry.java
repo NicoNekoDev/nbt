@@ -4,9 +4,9 @@ import dev.dewy.nbt.api.Tag;
 import dev.dewy.nbt.tags.TagType;
 import lombok.NonNull;
 
-import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * A registry mapping {@code byte} tag type IDs to tag type classes. Used to register custom-made {@link Tag} types.
@@ -14,7 +14,9 @@ import java.util.Map;
  * @author dewy
  */
 public class TagTypeRegistry {
-    private final Map<Byte, @NonNull Class<? extends Tag>> registry = new HashMap<>();
+    private final Map<Byte, Supplier<Tag>> idRegistry = new HashMap<>();
+    private final Map<String, Byte> nameToId = new HashMap<>();
+    private final Map<Byte, String> idToName = new HashMap<>();
 
     {
         TagType.registerAll(this);
@@ -23,31 +25,34 @@ public class TagTypeRegistry {
     /**
      * Register a custom-made tag type with a unique {@code byte} ID. IDs 0-12 (inclusive) are reserved and may not be used.
      *
-     * @param id the tag type's unique ID used in reading and writing.
-     * @param clazz the tag type class.
+     * @param id      the tag type's unique ID used in reading and writing.
+     * @param name    the tag type's unique name used in reading and writing.
+     * @param factory the tag factory.
      * @throws TagTypeRegistryException if the ID provided is either registered already or is a reserved ID (0-12 inclusive).
      */
-    public void registerTagType(byte id, @NonNull Class<? extends Tag> clazz) throws TagTypeRegistryException {
+    public void registerTagType(byte id, @NonNull String name, @NonNull Supplier<Tag> factory) throws TagTypeRegistryException {
         if (id == 0) {
-            throw new TagTypeRegistryException("Cannot register NBT tag type " + clazz + " with ID " + id + ", as that ID is reserved.");
+            throw new TagTypeRegistryException("Cannot register NBT tag type " + name + " with ID " + id + ", as that ID is reserved.");
         }
 
-        if (this.registry.containsKey(id)) {
-            throw new TagTypeRegistryException("Cannot register NBT tag type " + clazz + " with ID " + id + ", as that ID is already in use by the tag type " + this.registry.get(id).getSimpleName());
+        if (this.idRegistry.containsKey(id)) {
+            throw new TagTypeRegistryException("Cannot register NBT tag type " + name + " with ID " + id + ", as that ID is already in use by the tag type " + this.idToName.get(id));
         }
 
-        if (registry.containsValue(clazz)) {
+        if (idRegistry.containsValue(factory)) {
             byte existing = 0;
-            for (Map.Entry<Byte, Class<? extends Tag>> entry : this.registry.entrySet()) {
-                if (entry.getValue().equals(clazz)) {
+            for (Map.Entry<Byte, Supplier<Tag>> entry : this.idRegistry.entrySet()) {
+                if (entry.getValue().equals(factory)) {
                     existing = entry.getKey();
                 }
             }
 
-            throw new TagTypeRegistryException("NBT tag type " + clazz.getSimpleName() + " already registered under ID " + existing);
+            throw new TagTypeRegistryException("NBT tag type " + name + " already registered under ID " + existing);
         }
 
-        this.registry.put(id, clazz);
+        this.idRegistry.put(id, factory);
+        this.nameToId.put(name, id);
+        this.idToName.put(id, name);
     }
 
     /**
@@ -56,51 +61,77 @@ public class TagTypeRegistry {
      * @param id the ID of the tag type to deregister.
      * @return if the tag type was deregistered successfully.
      */
-    public boolean deregisterTagType(byte id)  {
+    public boolean unregisterTagType(byte id) {
         if (id >= 0 && id <= 12) {
             return false;
         }
 
-        return this.registry.remove(id) != null;
+        String name = this.idToName.get(id);
+        if (name == null) return false;
+
+        return this.idRegistry.remove(id) != null && this.nameToId.remove(name) != null && this.idToName.remove(id) != null;
+    }
+
+    /**
+     * Deregister a custom-made tag type with a provided tag name.
+     *
+     * @param name the name of the tag type to deregister.
+     * @return if the tag type was deregistered successfully.
+     */
+    public boolean unregisterTagType(@NonNull String name) {
+        byte id = this.nameToId.get(name);
+
+        return this.unregisterTagType(id);
     }
 
     /**
      * Deregister a custom-made tag type with a provided tag type ID and class value.
      *
-     * @param id the ID of the tag type to deregister.
-     * @param clazz the class value of the tag type to deregister.
+     * @param id      the ID of the tag type to deregister.
+     * @param factory the factory of the tag type to deregister.
      * @return if the tag type was deregistered successfully.
      */
-    public boolean deregisterTagType(byte id, Class<? extends Tag> clazz) {
-        return this.registry.remove(id, clazz);
+    public boolean unregisterTagType(byte id, Supplier<Tag> factory) {
+        String name = this.idToName.get(id);
+        if (name == null) return false;
+
+        return this.idRegistry.remove(id, factory) && this.nameToId.remove(name, id) && this.idToName.remove(id, name);
     }
 
     /**
-     * Returns a tag type class value from the registry from a provided {@code byte} ID.
+     * Deregister a custom-made tag type with a provided tag type ID and class value.
+     *
+     * @param name    the name of the tag type to deregister.
+     * @param factory the factory of the tag type to deregister.
+     * @return if the tag type was deregistered successfully.
+     */
+    public boolean unregisterTagType(@NonNull String name, Supplier<Tag> factory) {
+        Byte id = this.nameToId.get(name);
+        if (id == null) return false;
+
+        return this.unregisterTagType(id, factory);
+    }
+
+    /**
+     * Returns a tag type factory from the registry from a provided {@code byte} ID.
      *
      * @param id the ID of the tag type to retrieve.
-     * @return a tag type class value from the registry from a provided {@code byte} ID.
+     * @return a tag type factory from the registry from a provided {@code byte} ID.
      */
-    public Class<? extends Tag> getClassFromId(byte id) {
-        return this.registry.get(id);
+    public Supplier<Tag> getFactoryFromId(byte id) {
+        return this.idRegistry.get(id);
     }
 
     /**
-     * Returns an empty instance of the given {@link Tag} type, with a {@code null} name and a default (possibly {@code null}) value.
-     * Only use this if you really know what you're doing.
+     * Returns a tag type factory from the registry from a provided {@code name}.
      *
-     * @param clazz the tag type to instantiate.
-     * @return an empty instance of the tag type provided.
-     * @throws TagTypeRegistryException if a reflection error occurs when instantiating the tag.
+     * @param name the name of the tag type to retrieve.
+     * @return a tag type factory from the registry from a provided {@code name}.
      */
-    public Tag instantiate(@NonNull Class<? extends Tag> clazz) throws TagTypeRegistryException {
-        try {
-            Constructor<? extends Tag> constructor = clazz.getDeclaredConstructor();
-            constructor.setAccessible(true);
+    public Supplier<Tag> getFactoryFromId(@NonNull String name) {
+        Byte id = this.nameToId.get(name);
+        if (id == null) return null;
 
-            return constructor.newInstance();
-        } catch (ReflectiveOperationException e) {
-            throw new TagTypeRegistryException("Instance of tag type class " + clazz.getSimpleName() + " could not be created.", e);
-        }
+        return this.getFactoryFromId(id);
     }
 }

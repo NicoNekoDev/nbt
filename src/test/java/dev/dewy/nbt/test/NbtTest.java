@@ -65,7 +65,7 @@ public class NbtTest {
 
         // compound and list tags
         CompoundTag subCompound = new CompoundTag("sub");
-        ListTag<CompoundTag> doubles = new ListTag<>("listmoment");
+        ListTag doubles = new ListTag("listmoment");
 
         for (int i = 0; i < 1776; i++) {
             CompoundTag tmp = new CompoundTag("tmp" + i);
@@ -80,13 +80,13 @@ public class NbtTest {
         root.put(subCompound);
 
         // compound containing an empty compound
-        ListTag<CompoundTag> compounds = new ListTag<>("compounds");
+        ListTag compounds = new ListTag("compounds");
         compounds.add(new CompoundTag());
         root.put(compounds);
 
         // list containing an empty list of ints
-        ListTag<ListTag<IntTag>> listsOfInts = new ListTag<>("listofints");
-        listsOfInts.add(new ListTag<>());
+        ListTag listsOfInts = new ListTag("listofints");
+        listsOfInts.add(new ListTag());
         root.putList("listofints", listsOfInts.getValue());
 
         // writing to file (no compression type provided for no compression)
@@ -103,7 +103,7 @@ public class NbtTest {
 
         // retrieving data from the read compound
         System.out.println(clone.getName());
-        System.out.println("Be sure to visit " + clone.getString("string").getValue() + " c:");
+        System.out.println("Be sure to visit " + clone.getStringTag("string").getValue() + " c:");
 
         // nbt to json and back: see readme for NBT JSON format documentation
         jsonTest();

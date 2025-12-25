@@ -34,7 +34,7 @@ public class ByteTag extends NumericalTag<Byte> {
     /**
      * Constructs a byte tag with a given name and value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code Number} value, to be converted to {@code byte}.
      */
     public ByteTag(String name, @NonNull Number value) {
@@ -44,7 +44,7 @@ public class ByteTag extends NumericalTag<Byte> {
     /**
      * Constructs a byte tag with a given name and value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code byte} value.
      */
     public ByteTag(String name, byte value) {
@@ -53,8 +53,8 @@ public class ByteTag extends NumericalTag<Byte> {
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.BYTE.getId();
+    public TagType getType() {
+        return TagType.BYTE;
     }
 
     @Override
@@ -72,8 +72,10 @@ public class ByteTag extends NumericalTag<Byte> {
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public ByteTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         output.writeByte(this.value);
+
+        return this;
     }
 
     @Override
@@ -91,7 +93,7 @@ public class ByteTag extends NumericalTag<Byte> {
     @Override
     public JsonObject toJson(int depth, TagTypeRegistry registry) throws IOException {
         JsonObject json = new JsonObject();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -116,17 +118,17 @@ public class ByteTag extends NumericalTag<Byte> {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        ByteTag byteTag = (ByteTag) o;
-
-        return value == byteTag.value;
+    public ByteTag copy() {
+        return new ByteTag(getName(), getValue());
     }
 
     @Override
     public int hashCode() {
-        return value;
+        return Byte.hashCode(this.value);
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof ByteTag other && this.value == other.value);
     }
 }

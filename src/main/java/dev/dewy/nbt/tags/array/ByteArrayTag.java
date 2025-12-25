@@ -2,10 +2,12 @@ package dev.dewy.nbt.tags.array;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import dev.dewy.nbt.api.Tag;
 import dev.dewy.nbt.api.registry.TagTypeRegistry;
 import dev.dewy.nbt.api.snbt.SnbtConfig;
 import dev.dewy.nbt.tags.TagType;
 import dev.dewy.nbt.tags.primitive.ByteTag;
+import dev.dewy.nbt.tags.primitive.StringTag;
 import dev.dewy.nbt.utils.StringUtils;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
@@ -64,8 +66,8 @@ public class ByteArrayTag extends ArrayTag<Byte> {
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.BYTE_ARRAY.getId();
+    public TagType getType() {
+        return TagType.BYTE_ARRAY;
     }
 
     @Override
@@ -83,9 +85,11 @@ public class ByteArrayTag extends ArrayTag<Byte> {
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public ByteArrayTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         output.writeInt(this.value.length);
         output.write(this.value);
+
+        return this;
     }
 
     @Override
@@ -102,7 +106,7 @@ public class ByteArrayTag extends ArrayTag<Byte> {
     public JsonObject toJson(int depth, TagTypeRegistry registry) throws IOException {
         JsonObject json = new JsonObject();
         JsonArray array = new JsonArray();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -222,17 +226,17 @@ public class ByteArrayTag extends ArrayTag<Byte> {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        ByteArrayTag that = (ByteArrayTag) o;
-
-        return Arrays.equals(value, that.value);
+    public Tag copy() {
+        return new ByteArrayTag(getName(), getValue());
     }
 
     @Override
     public int hashCode() {
-        return Arrays.hashCode(value);
+        return Arrays.hashCode(this.value);
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof ByteArrayTag other && this.value == other.value);
     }
 }

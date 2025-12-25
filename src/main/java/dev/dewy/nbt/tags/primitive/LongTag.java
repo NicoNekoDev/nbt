@@ -24,7 +24,7 @@ public class LongTag extends NumericalTag<Long> {
     /**
      * Constructs a long tag with a given name and value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code long} value.
      */
     public LongTag(String name, long value) {
@@ -33,8 +33,8 @@ public class LongTag extends NumericalTag<Long> {
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.LONG.getId();
+    public TagType getType() {
+        return TagType.LONG;
     }
 
     @Override
@@ -52,8 +52,10 @@ public class LongTag extends NumericalTag<Long> {
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public LongTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         output.writeLong(this.value);
+
+        return this;
     }
 
     @Override
@@ -71,7 +73,7 @@ public class LongTag extends NumericalTag<Long> {
     @Override
     public JsonObject toJson(int depth, TagTypeRegistry registry) {
         JsonObject json = new JsonObject();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -96,17 +98,17 @@ public class LongTag extends NumericalTag<Long> {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        LongTag longTag = (LongTag) o;
-
-        return value == longTag.value;
+    public LongTag copy() {
+        return new LongTag(getName(), getValue());
     }
 
     @Override
     public int hashCode() {
-        return (int) (value ^ (value >>> 32));
+        return Long.hashCode(this.value);
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof LongTag other && this.value == other.value);
     }
 }

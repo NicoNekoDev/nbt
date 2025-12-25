@@ -1,6 +1,7 @@
 package dev.dewy.nbt.tags.primitive;
 
 import com.google.gson.JsonObject;
+import dev.dewy.nbt.api.Tag;
 import dev.dewy.nbt.api.registry.TagTypeRegistry;
 import dev.dewy.nbt.api.snbt.SnbtConfig;
 import dev.dewy.nbt.tags.TagType;
@@ -33,8 +34,8 @@ public class FloatTag extends NumericalTag<Float> {
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.FLOAT.getId();
+    public TagType getType() {
+        return TagType.FLOAT;
     }
 
     @Override
@@ -52,8 +53,10 @@ public class FloatTag extends NumericalTag<Float> {
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public FloatTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         output.writeFloat(this.value);
+
+        return this;
     }
 
     @Override
@@ -71,7 +74,7 @@ public class FloatTag extends NumericalTag<Float> {
     @Override
     public JsonObject toJson(int depth, TagTypeRegistry registry) {
         JsonObject json = new JsonObject();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -96,17 +99,17 @@ public class FloatTag extends NumericalTag<Float> {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        FloatTag floatTag = (FloatTag) o;
-
-        return Float.compare(floatTag.value, value) == 0;
+    public Tag copy() {
+        return new FloatTag(getName(), getValue());
     }
 
     @Override
     public int hashCode() {
-        return (value != 0.0f ? Float.floatToIntBits(value) : 0);
+        return Float.hashCode(this.value);
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof FloatTag other && this.value == other.value);
     }
 }

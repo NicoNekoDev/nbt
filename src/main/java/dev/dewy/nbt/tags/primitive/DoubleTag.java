@@ -1,6 +1,7 @@
 package dev.dewy.nbt.tags.primitive;
 
 import com.google.gson.JsonObject;
+import dev.dewy.nbt.api.Tag;
 import dev.dewy.nbt.api.registry.TagTypeRegistry;
 import dev.dewy.nbt.api.snbt.SnbtConfig;
 import dev.dewy.nbt.tags.TagType;
@@ -24,7 +25,7 @@ public class DoubleTag extends NumericalTag<Double> {
     /**
      * Constructs a double tag with a given name and value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code double} value.
      */
     public DoubleTag(String name, double value) {
@@ -33,8 +34,8 @@ public class DoubleTag extends NumericalTag<Double> {
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.DOUBLE.getId();
+    public TagType getType() {
+        return TagType.DOUBLE;
     }
 
     @Override
@@ -52,8 +53,10 @@ public class DoubleTag extends NumericalTag<Double> {
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public DoubleTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         output.writeDouble(this.value);
+
+        return this;
     }
 
     @Override
@@ -71,7 +74,7 @@ public class DoubleTag extends NumericalTag<Double> {
     @Override
     public JsonObject toJson(int depth, TagTypeRegistry registry) {
         JsonObject json = new JsonObject();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -96,18 +99,17 @@ public class DoubleTag extends NumericalTag<Double> {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        DoubleTag doubleTag = (DoubleTag) o;
-
-        return Double.compare(doubleTag.value, value) == 0;
+    public Tag copy() {
+        return new DoubleTag(getName(), getValue());
     }
 
     @Override
     public int hashCode() {
-        long temp = Double.doubleToLongBits(value);
-        return (int) (temp ^ (temp >>> 32));
+        return Double.hashCode(this.value);
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof DoubleTag other && this.value == other.value);
     }
 }

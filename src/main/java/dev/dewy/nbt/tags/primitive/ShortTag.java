@@ -34,7 +34,7 @@ public class ShortTag extends NumericalTag<Short> {
     /**
      * Constructs a short tag with a given name and value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code Number} value, to be converted to {@code short}.
      */
     public ShortTag(String name, @NonNull Number value) {
@@ -44,7 +44,7 @@ public class ShortTag extends NumericalTag<Short> {
     /**
      * Constructs a short tag with a given name and value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code short} value.
      */
     public ShortTag(String name, short value) {
@@ -53,8 +53,8 @@ public class ShortTag extends NumericalTag<Short> {
     }
 
     @Override
-    public byte getTypeId() {
-        return TagType.SHORT.getId();
+    public TagType getType() {
+        return TagType.SHORT;
     }
 
     @Override
@@ -72,8 +72,10 @@ public class ShortTag extends NumericalTag<Short> {
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public ShortTag write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         output.writeShort(this.value);
+
+        return this;
     }
 
     @Override
@@ -91,7 +93,7 @@ public class ShortTag extends NumericalTag<Short> {
     @Override
     public JsonObject toJson(int depth, TagTypeRegistry registry) {
         JsonObject json = new JsonObject();
-        json.addProperty("type", this.getTypeId());
+        json.addProperty("type", this.getType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
@@ -116,17 +118,17 @@ public class ShortTag extends NumericalTag<Short> {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        ShortTag shortTag = (ShortTag) o;
-
-        return value == shortTag.value;
+    public ShortTag copy() {
+        return new ShortTag(getName(), getValue());
     }
 
     @Override
     public int hashCode() {
-        return value;
+        return Short.hashCode(this.value);
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof ShortTag other && this.value == other.value);
     }
 }

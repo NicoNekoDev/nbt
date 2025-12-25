@@ -6,10 +6,13 @@ import com.google.gson.JsonObject;
 import dev.dewy.nbt.api.Tag;
 import dev.dewy.nbt.api.json.JsonSerializable;
 import dev.dewy.nbt.api.registry.TagTypeRegistry;
-import dev.dewy.nbt.api.registry.TagTypeRegistryException;
 import dev.dewy.nbt.api.snbt.SnbtConfig;
 import dev.dewy.nbt.api.snbt.SnbtSerializable;
 import dev.dewy.nbt.tags.TagType;
+import dev.dewy.nbt.tags.array.ByteArrayTag;
+import dev.dewy.nbt.tags.array.IntArrayTag;
+import dev.dewy.nbt.tags.array.LongArrayTag;
+import dev.dewy.nbt.tags.primitive.*;
 import dev.dewy.nbt.utils.StringUtils;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
@@ -19,6 +22,9 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * The list tag (type ID 9) is used for storing an ordered list of unnamed NBT tags all of the same type.
@@ -28,7 +34,7 @@ import java.util.function.Consumer;
 @AllArgsConstructor
 public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, JsonSerializable, Iterable<T> {
     private @NonNull List<T> value;
-    private byte type;
+    private TagType type;
 
     /**
      * Constructs an empty, unnamed list tag.
@@ -49,23 +55,113 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
     /**
      * Constructs a list tag with a given name and {@code List<>} value.
      *
-     * @param name the tag's name.
+     * @param name  the tag's name.
      * @param value the tag's {@code List<>} value.
      */
     public ListTag(String name, @NonNull List<T> value) {
         if (value.isEmpty()) {
-            this.type = 0;
+            this.type = TagType.END;
         } else {
-            this.type = value.get(0).getTypeId();
+            this.type = value.getFirst().getType();
         }
 
         this.setName(name);
         this.setValue(value);
     }
 
+    /**
+     * Creates a list tag with some double values.
+     *
+     * @param values the double values
+     * @return the list tag
+     */
+    public static @NonNull ListTag<ByteTag> bytes(@NonNull byte... values) {
+        final ListTag<ByteTag> tag = new ListTag<>();
+
+        for (int value : values)
+            tag.add(new ByteTag(value));
+
+        return tag;
+    }
+
+    /**
+     * Creates a list tag with some double values.
+     *
+     * @param values the double values
+     * @return the list tag
+     */
+    public static @NonNull ListTag<IntTag> integers(@NonNull int... values) {
+        ListTag<IntTag> tag = new ListTag<>();
+
+        for (int value : values)
+            tag.add(new IntTag(value));
+
+        return tag;
+    }
+
+    /**
+     * Creates a list tag with some double values.
+     *
+     * @param values the double values
+     * @return the list tag
+     */
+    public static @NonNull ListTag<DoubleTag> doubles(@NonNull double... values) {
+        final ListTag<DoubleTag> tag = new ListTag<>();
+
+        for (final double value : values)
+            tag.add(new DoubleTag(value));
+
+        return tag;
+    }
+
+    /**
+     * Creates a list tag with some double values.
+     *
+     * @param values the double values
+     * @return the list tag
+     */
+    public static @NonNull ListTag<LongTag> longs(@NonNull long... values) {
+        ListTag<LongTag> tag = new ListTag<>();
+
+        for (long value : values)
+            tag.add(new LongTag(value));
+
+        return tag;
+    }
+
+    /**
+     * Creates a list tag with some float values.
+     *
+     * @param values the float values
+     * @return the list tag
+     */
+    public static @NonNull ListTag<FloatTag> floats(@NonNull float... values) {
+        ListTag<FloatTag> tag = new ListTag<>();
+
+        for (float value : values)
+            tag.add(new FloatTag(value));
+
+        return tag;
+    }
+
+    /**
+     * Creates a list tag with some string values.
+     *
+     * @param values the string values
+     * @return the list tag
+     */
+    public static @NonNull ListTag<StringTag> strings(@NonNull String... values) {
+        ListTag<StringTag> tag = new ListTag<>();
+
+        for (int i = 0, length = values.length; i < length; i++)
+            tag.add(new StringTag(requireNonNull(values[i], "value at index " + i)));
+
+        return tag;
+    }
+
     @Override
-    public byte getTypeId() {
-        return TagType.LIST.getId();
+    public TagType getType() {
+        return TagType.LIST;
     }
 
     @Override
@@ -78,7 +174,7 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
      *
      * @return the ID of the NBT tag type this list holds.
      */
-    public byte getListType() {
+    public TagType getListType() {
         return this.type;
     }
 
@@ -89,28 +185,31 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
      */
     public void setValue(@NonNull List<T> value) {
         if (value.isEmpty()) {
-            this.type = 0;
+            this.type = TagType.END;
         } else {
-            this.type = value.get(0).getTypeId();
+            this.type = value.getFirst().getType();
         }
 
         this.value = value;
     }
 
     @Override
-    public void write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
+    public ListTag<T> write(DataOutput output, int depth, TagTypeRegistry registry) throws IOException {
         if (depth > 512) {
             throw new IOException("NBT structure too complex (depth > 512).");
         }
 
-        output.writeByte(this.type);
+        output.writeByte(this.type.getId());
         output.writeInt(this.value.size());
 
-        for (T tag : this) {
+        for (Tag tag : this) {
             tag.write(output, depth + 1, registry);
         }
+
+        return this;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public ListTag<T> read(DataInput input, int depth, TagTypeRegistry registry) throws IOException {
         if (depth > 512) {
@@ -122,30 +221,26 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
         byte tagType = input.readByte();
         int length = input.readInt();
 
-        T next;
+        Tag next;
         for (int i = 0; i < length; i++) {
-            Class<? extends Tag> tagClass = registry.getClassFromId(tagType);
+            Supplier<Tag> tagFactory = registry.getFactoryFromId(tagType);
 
-            if (tagClass == null) {
+            if (tagFactory == null) {
                 throw new IOException("Tag type with ID " + tagType + " not present in tag type registry.");
             }
 
-            try {
-                next = (T) registry.instantiate(tagClass);
-            } catch (TagTypeRegistryException e) {
-                throw new IOException(e);
-            }
+            next = tagFactory.get();
 
             next.read(input, depth + 1, registry);
             next.setName(null);
 
-            tags.add(next);
+            tags.add((T) next);
         }
 
         if (tags.isEmpty()) {
-            this.type = 0;
+            this.type = TagType.END;
         } else {
-            this.type = tagType;
+            this.type = tags.getFirst().getType();
         }
 
         this.value = tags;
@@ -174,7 +269,7 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
         }
 
         if (config.isPrettyPrint()) {
-            sb.append("\n").append(StringUtils.multiplyIndent(depth , config)).append(']');
+            sb.append("\n").append(StringUtils.multiplyIndent(depth, config)).append(']');
         } else {
             sb.append(']');
         }
@@ -191,14 +286,14 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
         JsonObject json = new JsonObject();
         JsonArray value = new JsonArray();
 
-        json.addProperty("type", this.getTypeId());
-        json.addProperty("listType", this.getListType());
+        json.addProperty("type", this.getType().getName());
+        json.addProperty("listType", this.getListType().getName());
 
         if (this.getName() != null) {
             json.addProperty("name", this.getName());
         }
 
-        for (T tag : this) {
+        for (Tag tag : this) {
             tag.setName(null);
             value.add(((JsonSerializable) tag).toJson(depth + 1, registry));
         }
@@ -208,6 +303,7 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
         return json;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public ListTag<T> fromJson(JsonObject json, int depth, TagTypeRegistry registry) throws IOException {
         if (depth > 512) {
@@ -222,36 +318,471 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
             this.setName(null);
         }
 
-        byte listType = json.get("listType").getAsByte();
+        String listType = json.getAsJsonPrimitive("listType").getAsString();
         List<T> tags = new LinkedList<>();
 
-        T nextTag;
+        Tag nextTag;
         for (JsonElement element : json.getAsJsonArray("value")) {
-            Class<? extends Tag> tagClass = registry.getClassFromId(listType);
+            Supplier<Tag> tagFactory = registry.getFactoryFromId(listType);
 
-            if (tagClass == null) {
-                throw new IOException("Tag type with ID " + listType + " not present in tag type registry.");
+            if (tagFactory == null) {
+                throw new IOException("Tag type with name " + listType + " not present in tag type registry.");
             }
 
-            try {
-                nextTag = (T) registry.instantiate(tagClass);
-            } catch (TagTypeRegistryException e) {
-                throw new IOException(e);
-            }
+            nextTag = tagFactory.get();
 
             ((JsonSerializable) nextTag).fromJson((JsonObject) element, depth + 1, registry);
-            tags.add(nextTag);
+            tags.add((T) nextTag);
         }
 
         if (tags.isEmpty()) {
-            this.type = 0;
+            this.type = TagType.END;
         } else {
-            this.type = listType;
+            this.type = tags.getFirst().getType();
         }
 
         this.value = tags;
 
         return this;
+    }
+
+    /**
+     * Gets a byte.
+     *
+     * @param index the index
+     * @return the byte value, or {@code 0}
+     */
+    public byte getByte(int index) {
+        return this.getByte(index, (byte) 0);
+    }
+
+    /**
+     * Gets a byte.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the byte value, or {@code defaultValue}
+     */
+    public byte getByte(int index, byte defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType().isNumber())
+            return ((NumericalTag<?>) tag).byteValue();
+
+        return defaultValue;
+    }
+
+    public ByteTag getByteTag(int index) {
+        return this.getByteTag(index, null);
+    }
+
+    public ByteTag getByteTag(int index, ByteTag defaultValue) {
+        return (ByteTag) this.get(index, defaultValue, TagType.BYTE);
+    }
+
+    /**
+     * Gets a short.
+     *
+     * @param index the index
+     * @return the short value, or {@code 0}
+     */
+    public short getShort(int index) {
+        return this.getShort(index, (short) 0);
+    }
+
+    /**
+     * Gets a short.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the short value, or {@code defaultValue}
+     */
+    public short getShort(int index, short defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType().isNumber())
+            return ((NumericalTag<?>) tag).shortValue();
+
+        return defaultValue;
+    }
+
+    public ShortTag getShortTag(int index) {
+        return this.getShortTag(index, null);
+    }
+
+    public ShortTag getShortTag(int index, ShortTag defaultValue) {
+        return (ShortTag) this.get(index, defaultValue, TagType.SHORT);
+    }
+
+    /**
+     * Gets an int.
+     *
+     * @param index the index
+     * @return the int value, or {@code 0}
+     */
+    public int getInt(int index) {
+        return this.getInt(index, 0);
+    }
+
+    /**
+     * Gets an int.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the int value, or {@code defaultValue}
+     */
+    public int getInt(int index, int defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType().isNumber())
+            return ((NumericalTag<?>) tag).intValue();
+
+        return defaultValue;
+    }
+
+    public IntTag getIntTag(int index) {
+        return this.getIntTag(index, null);
+    }
+
+    public IntTag getIntTag(int index, IntTag defaultValue) {
+        return (IntTag) this.get(index, defaultValue, TagType.INT);
+    }
+
+    /**
+     * Gets a long.
+     *
+     * @param index the index
+     * @return the long value, or {@code 0}
+     */
+    public long getLong(int index) {
+        return this.getLong(index, 0L);
+    }
+
+    /**
+     * Gets a long.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the long value, or {@code defaultValue}
+     */
+    public long getLong(int index, long defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType().isNumber())
+            return ((NumericalTag<?>) tag).longValue();
+
+        return defaultValue;
+    }
+
+    public LongTag getLongTag(int index) {
+        return this.getLongTag(index, null);
+    }
+
+    public LongTag getLongTag(int index, LongTag defaultValue) {
+        return (LongTag) this.get(index, defaultValue, TagType.LONG);
+    }
+
+    /**
+     * Gets a float.
+     *
+     * @param index the index
+     * @return the float value, or {@code 0}
+     */
+    public float getFloat(int index) {
+        return this.getFloat(index, 0f);
+    }
+
+    /**
+     * Gets a float.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the float value, or {@code defaultValue}
+     */
+    public float getFloat(int index, float defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType().isNumber())
+            return ((NumericalTag<?>) tag).floatValue();
+
+        return defaultValue;
+    }
+
+    public FloatTag getFloatTag(int index) {
+        return this.getFloatTag(index, null);
+    }
+
+    public FloatTag getFloatTag(int index, FloatTag defaultValue) {
+        return (FloatTag) this.get(index, defaultValue, TagType.FLOAT);
+    }
+
+    /**
+     * Gets a double.
+     *
+     * @param index the index
+     * @return the double value, or {@code 0}
+     */
+    public double getDouble(int index) {
+        return this.getDouble(index, 0d);
+    }
+
+    /**
+     * Gets a double.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the double value, or {@code defaultValue}
+     */
+    public double getDouble(int index, double defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType().isNumber())
+            return ((NumericalTag<?>) tag).doubleValue();
+
+        return defaultValue;
+    }
+
+    public DoubleTag getDoubleTag(int index) {
+        return this.getDoubleTag(index, null);
+    }
+
+    public DoubleTag getDoubleTag(int index, DoubleTag defaultValue) {
+        return (DoubleTag) this.get(index, defaultValue, TagType.FLOAT);
+    }
+
+    /**
+     * Gets an array of bytes.
+     *
+     * @param index the index
+     * @return the array of bytes, or a zero-length array
+     */
+    public byte[] getByteArray(int index) {
+        return this.getByteArray(index, new byte[0]);
+    }
+
+    /**
+     * Gets an array of bytes.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the array of bytes, or {@code defaultValue}
+     */
+    public byte[] getByteArray(int index, byte[] defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType() == TagType.BYTE_ARRAY)
+            return ((ByteArrayTag) tag).getValue();
+
+        return defaultValue;
+    }
+
+    public ByteArrayTag getByteArrayTag(int index) {
+        return this.getByteArrayTag(index, null);
+    }
+
+    public ByteArrayTag getByteArrayTag(int index, ByteArrayTag defaultValue) {
+        return (ByteArrayTag) this.get(index, defaultValue, TagType.BYTE_ARRAY);
+    }
+
+    /**
+     * Gets a string.
+     *
+     * @param index the index
+     * @return the string value, or {@code ""}
+     */
+    public String getString(int index) {
+        return this.getString(index, "");
+    }
+
+    /**
+     * Gets a string.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the string value, or {@code defaultValue}
+     */
+    public String getString(int index, String defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType() == TagType.STRING)
+            return ((StringTag) tag).getValue();
+
+        return defaultValue;
+    }
+
+    public StringTag getStringTag(int index) {
+        return this.getStringTag(index, null);
+    }
+
+    public StringTag getStringTag(int index, StringTag defaultValue) {
+        return (StringTag) this.get(index, defaultValue, TagType.STRING);
+    }
+
+    /**
+     * Gets a compound.
+     *
+     * @param index the index
+     * @return the compound, or null
+     */
+    public CompoundTag getCompoundTag(int index) {
+        return this.getCompoundTag(index, null);
+    }
+
+    /**
+     * Gets a compound.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the compound, or {@code defaultValue}
+     */
+    public CompoundTag getCompoundTag(int index, CompoundTag defaultValue) {
+        return (CompoundTag) this.get(index, defaultValue, TagType.COMPOUND);
+    }
+
+    /**
+     * Gets a list.
+     *
+     * @param index the index
+     * @return the list, or null
+     */
+    public <C extends Tag> ListTag<C> getListTag(int index) {
+        return this.getListTag(index, null);
+    }
+
+    /**
+     * Gets a list.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the list, or {@code defaultValue}
+     */
+    @SuppressWarnings("unchecked")
+    public <C extends Tag> ListTag<C> getListTag(int index, ListTag<C> defaultValue) {
+        return (ListTag<C>) this.get(index, defaultValue, TagType.LIST);
+    }
+
+    /**
+     * Gets an array of ints.
+     *
+     * @param index the index
+     * @return the array of ints, or a zero-length array
+     */
+    public int[] getIntArray(int index) {
+        return this.getIntArray(index, new int[0]);
+    }
+
+    /**
+     * Gets an array of ints.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the array of ints, or {@code defaultValue}
+     */
+    public int[] getIntArray(int index, int[] defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType() == TagType.INT_ARRAY)
+            return ((IntArrayTag) tag).getValue();
+
+        return defaultValue;
+    }
+
+    public IntArrayTag getIntArrayTag(int index) {
+        return this.getIntArrayTag(index, null);
+    }
+
+    public IntArrayTag getIntArrayTag(int index, IntArrayTag defaultValue) {
+        return (IntArrayTag) this.get(index, defaultValue, TagType.INT_ARRAY);
+    }
+
+    /**
+     * Gets an array of longs.
+     *
+     * @param index the index
+     * @return the array of longs, or a zero-length array
+     */
+    public long[] getLongArray(int index) {
+        return this.getLongArray(index, new long[0]);
+    }
+
+    /**
+     * Gets an array of longs.
+     *
+     * @param index        the index
+     * @param defaultValue the default value
+     * @return the array of longs, or {@code defaultValue}
+     */
+    public long[] getLongArray(int index, long[] defaultValue) {
+        Tag tag = this.get(index);
+
+        if (tag.getType() == TagType.LONG_ARRAY)
+            return ((LongArrayTag) tag).getValue();
+
+        return defaultValue;
+    }
+
+    public LongArrayTag getLongArrayTag(int index) {
+        return this.getLongArrayTag(index, null);
+    }
+
+    public LongArrayTag getLongArrayTag(int index, LongArrayTag defaultValue) {
+        return (LongArrayTag) this.get(index, defaultValue, TagType.LONG_ARRAY);
+    }
+
+    /**
+     * Retrieves a tag from its index in the list.
+     *
+     * @param index the index of the tag to be retrieved.
+     * @return the tag at the specified index, or null if not found.
+     */
+    public Tag get(int index) {
+        return this.get(index, (Tag) null);
+    }
+
+    /**
+     * Retrieves a tag from its index in the list.
+     *
+     * @param index the index of the tag to be retrieved.
+     * @return the tag at the specified index, or the default value if the index is out of bounds or null.
+     */
+    public Tag get(int index, Tag defaultValue) {
+        if (index < 0 || index >= size())
+            return defaultValue;
+
+        Tag tag = this.value.get(index);
+
+        if (tag == null)
+            return defaultValue;
+
+        return tag;
+    }
+
+    /**
+     * Retrieves a tag from its index in the list.
+     *
+     * @param index the index of the tag to be retrieved.
+     * @return the tag at the specified index, or null if not found.
+     */
+    public Tag get(int index, TagType tagType) {
+        return this.get(index, null, tagType);
+    }
+
+    /**
+     * Retrieves a tag from its index in the list.
+     *
+     * @param index the index of the tag to be retrieved.
+     * @return the tag at the specified index, or the default value if the index is out of bounds or null.
+     */
+    public Tag get(int index, Tag defaultValue, TagType tagType) {
+        if (index < 0 || index >= size())
+            return defaultValue;
+
+        Tag tag = this.value.get(index);
+
+        if (tag == null || tag.getType() != tagType)
+            return defaultValue;
+
+        return tag;
     }
 
     /**
@@ -278,16 +809,17 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
      * @param tag the tag to be added.
      * @return true if added successfully.
      */
-    public boolean add(@NonNull T tag) {
+    @SuppressWarnings("unchecked")
+    public boolean add(@NonNull Tag tag) {
         if (this.value.isEmpty()) {
-            this.type = tag.getTypeId();
+            this.type = tag.getType();
         }
 
-        if (tag.getTypeId() != this.type) {
+        if (tag.getType() != this.type) {
             return false;
         }
 
-        return this.value.add(tag);
+        return this.value.add((T) tag);
     }
 
     /**
@@ -295,18 +827,19 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
      * Shifts the tag currently at that position and any subsequent tags to the right.
      *
      * @param index index at which the tag is to be inserted.
-     * @param tag tag to be inserted.
+     * @param tag   tag to be inserted.
      */
-    public void insert(int index, @NonNull T tag) {
+    @SuppressWarnings("unchecked")
+    public void insert(int index, @NonNull Tag tag) {
         if (this.value.isEmpty()) {
-            this.type = tag.getTypeId();
+            this.type = tag.getType();
         }
 
-        if (tag.getTypeId() != this.type) {
+        if (tag.getType() != this.type) {
             return;
         }
 
-        this.value.add(index, tag);
+        this.value.add(index, (T) tag);
     }
 
     /**
@@ -315,11 +848,12 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
      * @param tag the tag to be removed.
      * @return true if the tag was removed successfully, false otherwise.
      */
-    public boolean remove(@NonNull T tag) {
+    @SuppressWarnings("SuspiciousMethodCalls")
+    public boolean remove(@NonNull Tag tag) {
         boolean success = this.value.remove(tag);
 
         if (this.value.isEmpty()) {
-            this.type = 0;
+            this.type = TagType.END;
         }
 
         return success;
@@ -331,24 +865,14 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
      * @param index the index of the tag to be removed.
      * @return the removed tag.
      */
-    public T remove(int index) {
-        T previous = this.value.remove(index);
+    public Tag remove(int index) {
+        Tag previous = this.value.remove(index);
 
         if (this.value.isEmpty()) {
-            this.type = 0;
+            this.type = TagType.END;
         }
 
         return previous;
-    }
-
-    /**
-     * Retrieves a tag from its index in the list.
-     *
-     * @param index the index of the tag to be retrieved.
-     * @return the tag at the specified index.
-     */
-    public T get(int index) {
-        return this.value.get(index);
     }
 
     /**
@@ -357,7 +881,8 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
      * @param tag the tag to check for.
      * @return true if this list contains the tag, false otherwise.
      */
-    public boolean contains(@NonNull T tag) {
+    @SuppressWarnings("SuspiciousMethodCalls")
+    public boolean contains(@NonNull Tag tag) {
         return this.value.contains(tag);
     }
 
@@ -367,7 +892,8 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
      * @param tags the tags to be checked for.
      * @return true if this list contains all tags in the collection, false otherwise.
      */
-    public boolean containsAll(@NonNull Collection<T> tags) {
+    @SuppressWarnings("SuspiciousMethodCalls")
+    public boolean containsAll(@NonNull Collection<Tag> tags) {
         return this.value.containsAll(tags);
     }
 
@@ -375,7 +901,7 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
      * Removes all tags from the list. The list will be empty after this call returns.
      */
     public void clear() {
-        this.type = 0;
+        this.type = TagType.END;
         this.value.clear();
     }
 
@@ -400,20 +926,17 @@ public class ListTag<T extends Tag> extends Tag implements SnbtSerializable, Jso
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        ListTag<?> listTag = (ListTag<?>) o;
-
-        if (type != listTag.type) return false;
-        return Objects.equals(value, listTag.value);
+    public Tag copy() {
+        return new ListTag<>(getName(), this.value.stream().map(Tag::copy).toList());
     }
 
     @Override
     public int hashCode() {
-        int result = value != null ? value.hashCode() : 0;
-        result = 31 * result + (int) type;
-        return result;
+        return this.value.hashCode();
+    }
+
+    @Override
+    public boolean equals(final Object that) {
+        return this == that || (that instanceof ListTag<?> other && this.value.equals(other.value));
     }
 }
